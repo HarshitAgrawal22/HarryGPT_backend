@@ -1,0 +1,231 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Interface</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .user-message {
+            background-color: #e1ffc7;
+            border: 1px solid #b1f0a1;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            max-width: 70%;
+            align-self: flex-start;
+        }
+
+        .bot-message {
+            background-color: #d1e7f8;
+            border: 1px solid #a0c1e2;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            max-width: 70%;
+            align-self: flex-end;
+        }
+
+        .error-message {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            max-width: 70%;
+        }
+
+        #chat-container {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .session-item {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-md-3">
+                <button class="btn btn-primary mb-3" id="create-session">New Chat</button>
+                <button class="btn btn-secondary mb-3" onclick="logout()">Logout</button>
+                <h3>Previous Chats</h3>
+                <ul id="session-list" class="list-group"></ul>
+            </div>
+            <div class="col-md-9">
+                <div id="chat-container" class="border p-3 mb-3" style="height: 400px; overflow-y: scroll;"></div>
+                <form id="chat-form">
+                    <input type="text" id="chat-input" placeholder="Type your message here..." class="form-control">
+                    <button type="submit" class="btn btn-primary mt-2">Send</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <script>
+        let currentSessionId = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatForm = document.getElementById('chat-form');
+            const chatInput = document.getElementById('chat-input');
+            const chatContainer = document.getElementById('chat-container');
+            const sessionList = document.getElementById('session-list');
+            const createSessionButton = document.getElementById('create-session');
+
+            // Fetch chat sessions on load
+            fetchChatSessions();
+
+            // Fetch chat sessions
+            function fetchChatSessions() {
+                fetch('{% url "get_chat_sessions" %}')
+                    .then(response => response.json())
+                    .then(data => {
+                        sessionList.innerHTML = '';
+                        data.sessions.forEach(session => {
+                            const sessionItem = document.createElement('li');
+                            sessionItem.textContent = session.name;
+                            sessionItem.dataset.sessionId = session.id;
+                            sessionItem.classList.add('list-group-item', 'session-item');
+                            sessionItem.addEventListener('click', () => loadChatSession(session.id));
+                            
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.textContent = 'Delete';
+                            deleteBtn.classList.add('btn', 'btn-danger', 'btn-sm', 'float-right');
+                            deleteBtn.onclick = (event) => {
+                                event.stopPropagation();
+                                deleteChatSession(session.id);
+                            };
+                            
+                            sessionItem.appendChild(deleteBtn);
+                            sessionList.appendChild(sessionItem);
+                        });
+                    });
+            }
+
+            // Load chat session
+            function loadChatSession(sessionId) {
+                currentSessionId = sessionId;
+                chatContainer.innerHTML = '';
+                fetch(`/get_chat_messages/${sessionId}/`)
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Fetched chat messages:', data); // Log the data
+                        if (Array.isArray(data)) {
+                            data.forEach(message => {
+                                appendMessage(message.sender, message.text);
+                            });
+                        } else {
+                            console.error('Invalid data structure:', data);
+                            // Optionally show a user-friendly message
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Fetch error:', error);
+                        // Optionally show a user-friendly message
+                    });
+            }
+
+            // Append message to chat container
+            function appendMessage(sender, text) {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add(sender === 'user' ? 'user-message' : 'bot-message');
+                messageElement.textContent = `${sender === 'user' ? 'You' : 'Bot'}: ${text}`;
+                chatContainer.appendChild(messageElement);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            // Handle form submit
+            chatForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                const userInput = chatInput.value.trim();
+                if (!userInput || !currentSessionId) return;
+
+                fetch('{% url "chat" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ input: userInput, chat_session_id: currentSessionId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    appendMessage('user', userInput);
+                    if (data.response) {
+                        appendMessage('bot', data.response);
+                    } else {
+                        const errorMessage = document.createElement('div');
+                        errorMessage.classList.add('error-message');
+                        errorMessage.textContent = 'Error: ' + data.error;
+                        chatContainer.appendChild(errorMessage);
+                    }
+                    chatInput.value = '';
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                });
+            });
+
+            // Create new chat session
+            createSessionButton.addEventListener('click', function() {
+                const sessionName = prompt('Enter session name:');
+                if (!sessionName) return;
+
+                fetch('{% url "create_chat_session" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ session_name: sessionName })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    currentSessionId = data.chat_session_id;
+                    chatContainer.innerHTML = '';
+                    fetchChatSessions();
+                });
+            });
+
+            // Delete chat session
+            function deleteChatSession(sessionId) {
+                fetch(`/delete_chat_session/${sessionId}/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        fetchChatSessions();
+                        chatContainer.innerHTML = '';
+                    }
+                });
+            }
+        });
+        function logout() {
+            fetch('{% url "logout" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+                .then(response => {
+                    console.log('Logout response:', response);  // Debug log
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    } else {
+                        console.error('Logout failed:', response.statusText);
+                    }
+                })
+                .catch(error => {
+                    console.error('Logout error:', error);
+                });
+        }
+    </script>
+</body>
+</html>
