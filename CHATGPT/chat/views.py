@@ -22,8 +22,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 logger = logging.getLogger(__name__)
 
 # Initialize Google Generative AI
-genai.configure(api_key="AIzaSyDxd4SKb64-5fSN23xdNoqXm_IAxv2eYX8")
-g_model = genai.GenerativeModel("gemini-1.5-flash")
+genai.configure(api_key="AIzaSyDb1VLrY9x-DaO9kZAN6pky3pJz7Jxd26k")
+g_model = genai.GenerativeModel("gemini-1.5-pro-exp-0801")
 Chat = g_model.start_chat(history=[])
 
 
@@ -51,7 +51,7 @@ class ChatView(APIView):
     def post(self, request):
         try:
             data = json.loads(request.body)
-            print(data)
+            ic(data)
             # TODO in the below line i need to fetch the id of user
             user_id = request.user.id
             print(user_id)
@@ -93,17 +93,12 @@ class ChatView(APIView):
             Interaction.objects.create(
                 user_id=user_id, user_input=user_input, response=response_text
             )
-            print(response_text)
+            ic(response_text)
             return JsonResponse({"response": response_text})
         except Exception as e:
             logger.error(f"Error in chat view: {str(e)}")
 
             return JsonResponse({"error": str(e)}, status=500)
-
-
-# @csrf_exempt
-# @login_required
-# def chat(request):
 
 
 def welcome(request):
@@ -113,21 +108,21 @@ def welcome(request):
 class ChatSessionsView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
+    def post(self, request):  # done
         data = json.loads(request.body)
-        print(data)
+        ic(data)
         session_name = data.get("session_name")
         chat_session = ChatSession.objects.create(name=session_name, user=request.user)
         return JsonResponse({"chat_session_id": chat_session.id}, status=201)
 
-    def delete(self, request):
+    def delete(self, request):  # done
         data = json.loads(request.body)
         session_id = data.get("session_id")
         ic(session_id)
         ChatSession.objects.filter(id=session_id).delete()
         return JsonResponse({"status": "deleted"})
 
-    def get(self, request):
+    def get(self, request):  # not done
         sessions = ChatSession.objects.all().values("id", "name", "user")
         return JsonResponse({"sessions": list(sessions)})
 
@@ -136,7 +131,7 @@ class personalChatSessions(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
+    def post(self, request):  # done
         print(request.user.id)
         sessions = ChatSession.objects.filter(user_id=request.user.id).values(
             "id", "name", "user"
@@ -191,7 +186,7 @@ def get_tokens(
     }  # got both the tokens
 
 
-class UserRegistrationView(APIView):
+class UserRegistrationView(APIView):  # done
     def get(self, request):
         return Response({"user": User.objects.get(pk=request.data.get("id")).username})
 
@@ -227,7 +222,7 @@ class UserRegistrationView(APIView):
     # this is used while registering a new user
 
 
-class UserLoginView(APIView):
+class UserLoginView(APIView):  # done
     renderer_classes = [UserRenderer]
     # these render  classes provide us the format to show the exception in the json of the api
 
